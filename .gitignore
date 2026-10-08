@@ -147,3 +147,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+/plans
+
+# Azure deploy staging (scripts/deploy-azure.ps1)
+.deploy/
+.deploy.zip
