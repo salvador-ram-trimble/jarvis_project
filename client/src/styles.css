@@ -100,13 +100,18 @@ body {
 }
 
 .list-toolbar {
+  align-items: flex-end;
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   margin-bottom: 1rem;
-  max-width: 14rem;
 }
 
-/* Rows open the customer, so show that they're clickable. */
+.list-toolbar modus-wc-select {
+  width: 16rem;
+}
+
+/* Rows open the record, so show that they're clickable. */
 .app-shell-main modus-wc-table tbody tr {
   cursor: pointer;
 }
@@ -144,4 +149,23 @@ body {
 
 .muted {
   color: var(--modus-wc-color-base-content-secondary, #6a6e79);
+}
+
+.section {
+  margin-top: 2.5rem;
+  max-width: 64rem;
+}
+
+.section-header {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.section-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
 }

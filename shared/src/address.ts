@@ -1,4 +1,4 @@
-/** A postal address. Embedded in customers (and, later, as a job's site address). Every field is optional. */
+/** A postal address. Embedded in customers, and in jobs as their site address. Every field is optional. */
 export interface Address {
   street?: string;
   city?: string;

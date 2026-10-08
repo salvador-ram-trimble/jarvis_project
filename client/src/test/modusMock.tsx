@@ -81,16 +81,19 @@ export function ModusWcTextarea(props: {
 export function ModusWcSelect(props: {
   label?: string;
   value?: string;
+  required?: boolean;
+  feedback?: Feedback;
   options?: { value: string; label: string }[];
   onInputChange?: (e: CustomEvent<{ target: HTMLSelectElement }>) => void;
 }) {
-  const id = useId();
+  const { id, feedbackId, fieldProps } = useFieldIds(props.feedback);
   return (
     <div>
       <label htmlFor={id}>{props.label}</label>
       <select
-        id={id}
+        {...fieldProps}
         value={props.value ?? ''}
+        required={props.required}
         onChange={(e) =>
           props.onInputChange?.(new CustomEvent('inputChange', { detail: { target: e.target } }))
         }
@@ -101,6 +104,59 @@ export function ModusWcSelect(props: {
           </option>
         ))}
       </select>
+      <FeedbackMessage id={feedbackId} feedback={props.feedback} />
+    </div>
+  );
+}
+
+/** Modus shows a calendar picker, and its inputChange always reports the date as YYYY-MM-DD (or ''). A text input stands in. */
+export function ModusWcDate(props: {
+  label?: string;
+  value?: string;
+  feedback?: Feedback;
+  onInputChange?: (e: CustomEvent<{ target: HTMLInputElement }>) => void;
+}) {
+  const { id, feedbackId, fieldProps } = useFieldIds(props.feedback);
+  return (
+    <div>
+      <label htmlFor={id}>{props.label}</label>
+      <input
+        {...fieldProps}
+        type="text"
+        placeholder="YYYY-MM-DD"
+        value={props.value ?? ''}
+        onChange={(e) =>
+          props.onInputChange?.(new CustomEvent('inputChange', { detail: { target: e.target } }))
+        }
+      />
+      <FeedbackMessage id={feedbackId} feedback={props.feedback} />
+    </div>
+  );
+}
+
+export function ModusWcNumberInput(props: {
+  label?: string;
+  value?: string;
+  min?: number;
+  step?: number;
+  feedback?: Feedback;
+  onInputChange?: (e: CustomEvent<{ target: HTMLInputElement }>) => void;
+}) {
+  const { id, feedbackId, fieldProps } = useFieldIds(props.feedback);
+  return (
+    <div>
+      <label htmlFor={id}>{props.label}</label>
+      <input
+        {...fieldProps}
+        type="number"
+        min={props.min}
+        step={props.step}
+        value={props.value ?? ''}
+        onChange={(e) =>
+          props.onInputChange?.(new CustomEvent('inputChange', { detail: { target: e.target } }))
+        }
+      />
+      <FeedbackMessage id={feedbackId} feedback={props.feedback} />
     </div>
   );
 }
@@ -141,6 +197,10 @@ export function ModusWcAlert(props: { alertTitle: string; alertDescription?: str
       <strong>{props.alertTitle}</strong> {props.alertDescription}
     </div>
   );
+}
+
+export function ModusWcBadge({ children }: Children) {
+  return <span>{children}</span>;
 }
 
 export function ModusWcLoader(props: { 'aria-label'?: string }) {

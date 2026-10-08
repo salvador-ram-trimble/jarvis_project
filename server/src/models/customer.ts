@@ -1,16 +1,6 @@
 import mongoose, { type Connection, type HydratedDocument, type InferSchemaType, type Model } from 'mongoose';
-import { ADDRESS_FIELDS, isValidEmail, validationMessages, type Address, type Customer } from '@jarvis/shared';
-
-const addressSchema = new mongoose.Schema(
-  {
-    street: { type: String, trim: true },
-    city: { type: String, trim: true },
-    state: { type: String, trim: true },
-    postalCode: { type: String, trim: true },
-    country: { type: String, trim: true },
-  },
-  { _id: false },
-);
+import { isValidEmail, validationMessages, type Customer } from '@jarvis/shared';
+import { addressSchema, toAddress } from './address.js';
 
 const customerSchema = new mongoose.Schema(
   {
@@ -35,15 +25,6 @@ const customerSchema = new mongoose.Schema(
 export type CustomerModel = Model<InferSchemaType<typeof customerSchema>>;
 type CustomerDocument = HydratedDocument<InferSchemaType<typeof customerSchema>>;
 
-function toAddress(stored: Partial<Record<keyof Address, string | null>>): Address | undefined {
-  const address: Address = {};
-  for (const field of ADDRESS_FIELDS) {
-    const value = stored[field];
-    if (value) address[field] = value;
-  }
-  return Object.keys(address).length > 0 ? address : undefined;
-}
-
 /** Converts a stored customer into the shape the API returns, leaving out fields that aren't set. */
 export function toCustomer(doc: CustomerDocument): Customer {
   const customer: Customer = {
@@ -55,7 +36,7 @@ export function toCustomer(doc: CustomerDocument): Customer {
   if (doc.company) customer.company = doc.company;
   if (doc.email) customer.email = doc.email;
   if (doc.phone) customer.phone = doc.phone;
-  const address = doc.address ? toAddress(doc.address) : undefined;
+  const address = toAddress(doc.address);
   if (address) customer.address = address;
   if (doc.notes) customer.notes = doc.notes;
   return customer;

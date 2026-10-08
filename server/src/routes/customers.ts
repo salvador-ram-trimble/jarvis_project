@@ -1,35 +1,17 @@
 import { Router } from 'express';
-import { ADDRESS_FIELDS, type CustomerInput } from '@jarvis/shared';
+import type { CustomerInput } from '@jarvis/shared';
 import { HttpError } from '../errors.js';
 import { toCustomer, type CustomerModel } from '../models/customer.js';
+import { bodyObject, normalizeAddress, normalizeText } from './fields.js';
 
 const TEXT_FIELDS = ['name', 'company', 'email', 'phone', 'notes'] as const satisfies readonly (keyof CustomerInput)[];
-
-/** Trims strings and turns blank ones into undefined, which means "not set". Anything else is left for Mongoose to reject. */
-function normalizeText(value: unknown): unknown {
-  if (value === null) return undefined;
-  if (typeof value !== 'string') return value;
-  return value.trim() || undefined;
-}
-
-function normalizeAddress(value: unknown): unknown {
-  if (value === null) return undefined;
-  if (typeof value !== 'object' || Array.isArray(value)) return value;
-  const address: Record<string, unknown> = {};
-  for (const field of ADDRESS_FIELDS) {
-    const text = normalizeText((value as Record<string, unknown>)[field]);
-    if (text !== undefined) address[field] = text;
-  }
-  // An address with nothing filled in is no address.
-  return Object.keys(address).length > 0 ? address : undefined;
-}
 
 /**
  * Picks the customer fields present in a request body, so clients can't set ids or timestamps.
  * A field that is present but blank comes back as undefined, which clears it on update.
  */
 function pickCustomerFields(body: unknown): Record<string, unknown> {
-  const source = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const source = bodyObject(body);
   const fields: Record<string, unknown> = {};
   for (const field of TEXT_FIELDS) {
     if (field in source) fields[field] = normalizeText(source[field]);

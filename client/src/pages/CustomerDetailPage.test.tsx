@@ -2,7 +2,8 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
-import { currentLocation, fullCustomer, makeCustomer, renderApp } from '../test/renderApp';
+import { formatCalendarDate } from '../format';
+import { currentLocation, fullCustomer, fullJob, makeCustomer, makeJob, renderApp } from '../test/renderApp';
 
 /** The value shown under a detail label. */
 function detail(label: string): HTMLElement {
@@ -65,5 +66,62 @@ describe('Customer detail page', () => {
     renderApp('/customers/c42');
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong on the server');
+  });
+});
+
+describe("Customer detail page's jobs", () => {
+  function jobsSection(): HTMLElement {
+    return screen.getByRole('region', { name: 'Jobs' });
+  }
+
+  it("lists the customer's jobs with their statuses, each linking to the job", async () => {
+    vi.mocked(api.customers.get).mockResolvedValue(fullCustomer);
+    vi.mocked(api.jobs.list).mockResolvedValue([
+      fullJob,
+      makeJob({ id: 'j43', title: 'Fix the tap', customer: { id: 'c42', name: 'Ada Lovelace' }, status: 'cancelled' }),
+    ]);
+    renderApp('/customers/c42');
+
+    const link = await screen.findByRole('link', { name: 'Kitchen remodel' });
+    expect(api.jobs.list).toHaveBeenCalledWith({ customerId: 'c42' });
+    expect(link).toHaveAttribute('href', '/jobs/j42');
+    const rows = within(within(jobsSection()).getByRole('table')).getAllByRole('row').slice(1);
+    expect(rows.map((row) => within(row).getAllByRole('cell').map((cell) => cell.textContent))).toEqual([
+      ['Kitchen remodel', 'In progress', formatCalendarDate('2026-10-12'), '$1,250.00'],
+      ['Fix the tap', 'Cancelled', '', ''],
+    ]);
+  });
+
+  it('shows an empty state when the customer has no jobs', async () => {
+    vi.mocked(api.customers.get).mockResolvedValue(fullCustomer);
+    renderApp('/customers/c42');
+
+    await screen.findByRole('heading', { level: 1, name: 'Ada Lovelace' });
+    expect(await within(jobsSection()).findByRole('heading', { name: 'No jobs yet' })).toBeInTheDocument();
+    expect(within(jobsSection()).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows an error message when the jobs fail to load', async () => {
+    vi.mocked(api.customers.get).mockResolvedValue(fullCustomer);
+    vi.mocked(api.jobs.list).mockRejectedValue(new ApiError(500, 'Something went wrong on the server'));
+    renderApp('/customers/c42');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load jobs');
+  });
+
+  it('opens the new job form with the customer selected and their address as the site address', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.customers.get).mockResolvedValue(fullCustomer);
+    vi.mocked(api.customers.list).mockResolvedValue([makeCustomer(), fullCustomer]);
+    renderApp('/customers/c42');
+
+    await screen.findByRole('heading', { level: 1, name: 'Ada Lovelace' });
+    await user.click(within(jobsSection()).getByRole('button', { name: 'New job' }));
+
+    expect(await screen.findByLabelText('Customer')).toHaveValue('c42');
+    expect(currentLocation()).toBe('/jobs/new?customerId=c42');
+    expect(screen.getByLabelText('Street')).toHaveValue('1 Main St');
+    expect(screen.getByLabelText('City')).toHaveValue('Springfield');
+    expect(screen.getByLabelText('Country')).toHaveValue('USA');
   });
 });

@@ -3,8 +3,11 @@ import { AppShell } from './components/AppShell';
 import { CustomerDetailPage } from './pages/CustomerDetailPage';
 import { CustomersListPage } from './pages/CustomersListPage';
 import { EditCustomerPage } from './pages/EditCustomerPage';
-import { JobsPage } from './pages/JobsPage';
+import { EditJobPage } from './pages/EditJobPage';
+import { JobDetailPage } from './pages/JobDetailPage';
+import { JobsListPage } from './pages/JobsListPage';
 import { NewCustomerPage } from './pages/NewCustomerPage';
+import { NewJobPage } from './pages/NewJobPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
@@ -16,7 +19,10 @@ export function App() {
         <Route path="customers/new" element={<NewCustomerPage />} />
         <Route path="customers/:id" element={<CustomerDetailPage />} />
         <Route path="customers/:id/edit" element={<EditCustomerPage />} />
-        <Route path="jobs" element={<JobsPage />} />
+        <Route path="jobs" element={<JobsListPage />} />
+        <Route path="jobs/new" element={<NewJobPage />} />
+        <Route path="jobs/:id" element={<JobDetailPage />} />
+        <Route path="jobs/:id/edit" element={<EditJobPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

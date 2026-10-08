@@ -4,8 +4,10 @@ import express, { type Express } from 'express';
 import type { Connection } from 'mongoose';
 import { errorHandler, notFound } from './errors.js';
 import { customerModel } from './models/customer.js';
+import { jobModel } from './models/job.js';
 import { customersRouter } from './routes/customers.js';
 import { healthRouter } from './routes/health.js';
+import { jobsRouter } from './routes/jobs.js';
 
 export interface AppOptions {
   /** The Mongoose connection every model is registered on. */
@@ -20,7 +22,9 @@ export function createApp({ connection, clientDistPath }: AppOptions): Express {
   app.use(express.json());
 
   app.use('/api/health', healthRouter(connection));
-  app.use('/api/customers', customersRouter(customerModel(connection)));
+  const Customers = customerModel(connection);
+  app.use('/api/customers', customersRouter(Customers));
+  app.use('/api/jobs', jobsRouter(jobModel(connection), Customers));
   app.use('/api', notFound);
 
   if (clientDistPath && fs.existsSync(clientDistPath)) {

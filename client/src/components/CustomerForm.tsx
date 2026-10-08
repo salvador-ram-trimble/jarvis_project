@@ -6,15 +6,15 @@ import {
 } from '@trimble-oss/moduswebcomponents-react';
 import { useRef, useState, type FormEvent } from 'react';
 import {
-  ADDRESS_FIELDS,
   isValidEmail,
   validationMessages,
-  type Address,
   type Customer,
   type CustomerInput,
   type FieldErrors,
 } from '@jarvis/shared';
 import type { ApiError } from '../api/client';
+import { AddressFields, toAddressValues, trimAddress, type AddressValues } from './AddressFields';
+import { feedbackFor, inputValue } from './formFields';
 
 interface CustomerFormProps {
   /** The customer being edited. Leave it out to create a new one. */
@@ -27,18 +27,8 @@ interface CustomerFormProps {
   onCancel: () => void;
 }
 
-type AddressValues = Required<Address>;
-
 /** Every input's text. Address fields are stored flat and grouped again on submit. */
 type FormValues = Required<Omit<CustomerInput, 'address'>> & AddressValues;
-
-const ADDRESS_LABELS: Record<keyof Address, string> = {
-  street: 'Street',
-  city: 'City',
-  state: 'State / region',
-  postalCode: 'Postal code',
-  country: 'Country',
-};
 
 function toFormValues(customer?: Customer): FormValues {
   return {
@@ -47,11 +37,7 @@ function toFormValues(customer?: Customer): FormValues {
     email: customer?.email ?? '',
     phone: customer?.phone ?? '',
     notes: customer?.notes ?? '',
-    street: customer?.address?.street ?? '',
-    city: customer?.address?.city ?? '',
-    state: customer?.address?.state ?? '',
-    postalCode: customer?.address?.postalCode ?? '',
-    country: customer?.address?.country ?? '',
+    ...toAddressValues(customer?.address),
   };
 }
 
@@ -60,16 +46,12 @@ function toFormValues(customer?: Customer): FormValues {
  * (the API treats a blank string as "not set").
  */
 function toInput(values: FormValues): CustomerInput {
-  const address = {} as AddressValues;
-  for (const field of ADDRESS_FIELDS) {
-    address[field] = values[field].trim();
-  }
   return {
     name: values.name.trim(),
     company: values.company.trim(),
     email: values.email.trim(),
     phone: values.phone.trim(),
-    address,
+    address: trimAddress(values),
     notes: values.notes.trim(),
   };
 }
@@ -84,10 +66,6 @@ function validate(input: CustomerInput): FieldErrors {
     errors.email = validationMessages.emailInvalid;
   }
   return errors;
-}
-
-function inputValue(event: CustomEvent<InputEvent>): string {
-  return (event.detail.target as HTMLInputElement | HTMLTextAreaElement).value;
 }
 
 export function CustomerForm({
@@ -112,11 +90,7 @@ export function CustomerForm({
   // Client-side errors win; otherwise show what the server rejected.
   const fieldErrors = Object.keys(clientErrors).length > 0 ? clientErrors : (serverError?.fields ?? {});
   const hasFieldErrors = Object.keys(fieldErrors).length > 0;
-
-  function feedback(errorKey: string) {
-    const message = fieldErrors[errorKey];
-    return message ? { level: 'error' as const, message } : undefined;
-  }
+  const feedback = feedbackFor(fieldErrors);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -170,20 +144,14 @@ export function CustomerForm({
           onInputChange={(e) => setField('phone', inputValue(e))}
         />
       </div>
-      <fieldset className="form-fieldset">
-        <legend>Address</legend>
-        {ADDRESS_FIELDS.map((field) => (
-          <ModusWcTextInput
-            key={field}
-            label={ADDRESS_LABELS[field]}
-            name={field}
-            inputId={`customer-address-${field}`}
-            value={values[field]}
-            feedback={feedback(`address.${field}`)}
-            onInputChange={(e) => setField(field, inputValue(e))}
-          />
-        ))}
-      </fieldset>
+      <AddressFields
+        legend="Address"
+        name="address"
+        idPrefix="customer-address"
+        values={values}
+        feedback={feedback}
+        onChange={setField}
+      />
       <ModusWcTextarea
         label="Notes"
         name="notes"

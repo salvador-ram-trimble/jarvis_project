@@ -5,6 +5,10 @@ import type {
   CustomerPatch,
   FieldErrors,
   HealthResponse,
+  Job,
+  JobFilters,
+  JobInput,
+  JobPatch,
 } from '@jarvis/shared';
 
 /** Thrown for any failed API call. Carries the server's message and field errors when there are any. */
@@ -58,5 +62,18 @@ export const api = {
       request<Customer>('/customers', { method: 'POST', body: JSON.stringify(input) }),
     update: (id: string, patch: CustomerPatch) =>
       request<Customer>(`/customers/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  },
+  jobs: {
+    list: (filters: JobFilters = {}) => {
+      const query = new URLSearchParams();
+      if (filters.status) query.set('status', filters.status);
+      if (filters.customerId) query.set('customerId', filters.customerId);
+      const search = query.toString();
+      return request<Job[]>(search ? `/jobs?${search}` : '/jobs');
+    },
+    get: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}`),
+    create: (input: JobInput) => request<Job>('/jobs', { method: 'POST', body: JSON.stringify(input) }),
+    update: (id: string, patch: JobPatch) =>
+      request<Job>(`/jobs/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   },
 };
