@@ -1,55 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { Customer, CustomerInput } from '@jarvis/shared';
-import { ApiError, api } from '../api/client';
-
-function toApiError(err: unknown): ApiError {
-  return err instanceof ApiError ? err : new ApiError(0, 'Something went wrong');
-}
+import type { Customer, CustomerInput, CustomerPatch } from '@jarvis/shared';
+import { api } from '../api/client';
+import { useApiAction, useApiData } from './useApi';
 
 /** Loads every customer. */
 export function useCustomers() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ApiError | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.customers
-      .list()
-      .then((data) => {
-        if (!cancelled) setCustomers(data);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(toApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { customers, loading, error };
+  const { data, loading, error } = useApiData(() => api.customers.list(), []);
+  return { customers: data ?? [], loading, error };
 }
 
-/** Creates a customer and tracks the request state. `create` resolves to the new customer, or null on failure. */
+/** Loads one customer. A 404 from the API (unknown or malformed id) sets `notFound`. */
+export function useCustomer(id: string) {
+  const { data, loading, error } = useApiData(() => api.customers.get(id), [id]);
+  const notFound = error?.status === 404;
+  return { customer: data, loading, notFound, error: notFound ? null : error };
+}
+
+const createCustomer = (input: CustomerInput) => api.customers.create(input);
+const updateCustomer = (id: string, patch: CustomerPatch) => api.customers.update(id, patch);
+
+/** `create` resolves to the new customer, or null on failure. */
 export function useCreateCustomer() {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
+  const { run, submitting, error } = useApiAction<[CustomerInput], Customer>(createCustomer);
+  return { create: run, submitting, error };
+}
 
-  const create = useCallback(async (input: CustomerInput): Promise<Customer | null> => {
-    setSubmitting(true);
-    setError(null);
-    try {
-      return await api.customers.create(input);
-    } catch (err) {
-      setError(toApiError(err));
-      return null;
-    } finally {
-      setSubmitting(false);
-    }
-  }, []);
-
-  return { create, submitting, error };
+/** `update` resolves to the updated customer, or null on failure. */
+export function useUpdateCustomer() {
+  const { run, submitting, error } = useApiAction<[string, CustomerPatch], Customer>(updateCustomer);
+  return { update: run, submitting, error };
 }

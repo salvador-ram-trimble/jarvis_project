@@ -3,34 +3,125 @@
  * so tests swap them for plain elements with the same props and events. That way tests can find
  * them by accessible role and label.
  */
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 type Children = { children?: ReactNode };
 
-export function ModusWcTextInput(props: {
-  label?: string;
-  value?: string;
-  required?: boolean;
-  feedback?: { level: string; message?: string };
-  onInputChange?: (e: CustomEvent<{ target: HTMLInputElement }>) => void;
-}) {
+type Feedback = { level: string; message?: string };
+
+/** Wires up the label and feedback the way Modus does, so tests can use getByLabelText and toHaveAccessibleDescription. */
+function useFieldIds(feedback?: Feedback) {
   const id = useId();
   const feedbackId = `${id}-feedback`;
+  return {
+    id,
+    feedbackId,
+    fieldProps: {
+      id,
+      'aria-invalid': feedback?.level === 'error' || undefined,
+      'aria-describedby': feedback ? feedbackId : undefined,
+    },
+  };
+}
+
+function FeedbackMessage({ id, feedback }: { id: string; feedback?: Feedback }) {
+  return feedback?.message ? <div id={id}>{feedback.message}</div> : null;
+}
+
+export function ModusWcTextInput(props: {
+  label?: string;
+  type?: string;
+  value?: string;
+  required?: boolean;
+  feedback?: Feedback;
+  onInputChange?: (e: CustomEvent<{ target: HTMLInputElement }>) => void;
+}) {
+  const { id, feedbackId, fieldProps } = useFieldIds(props.feedback);
   return (
     <div>
       <label htmlFor={id}>{props.label}</label>
       <input
-        id={id}
+        {...fieldProps}
+        type={props.type ?? 'text'}
         value={props.value ?? ''}
         required={props.required}
-        aria-invalid={props.feedback?.level === 'error' || undefined}
-        aria-describedby={props.feedback ? feedbackId : undefined}
         onChange={(e) =>
           props.onInputChange?.(new CustomEvent('inputChange', { detail: { target: e.target } }))
         }
       />
-      {props.feedback?.message && <div id={feedbackId}>{props.feedback.message}</div>}
+      <FeedbackMessage id={feedbackId} feedback={props.feedback} />
     </div>
+  );
+}
+
+export function ModusWcTextarea(props: {
+  label?: string;
+  value?: string;
+  rows?: number;
+  feedback?: Feedback;
+  onInputChange?: (e: CustomEvent<{ target: HTMLTextAreaElement }>) => void;
+}) {
+  const { id, feedbackId, fieldProps } = useFieldIds(props.feedback);
+  return (
+    <div>
+      <label htmlFor={id}>{props.label}</label>
+      <textarea
+        {...fieldProps}
+        rows={props.rows}
+        value={props.value ?? ''}
+        onChange={(e) =>
+          props.onInputChange?.(new CustomEvent('inputChange', { detail: { target: e.target } }))
+        }
+      />
+      <FeedbackMessage id={feedbackId} feedback={props.feedback} />
+    </div>
+  );
+}
+
+export function ModusWcSelect(props: {
+  label?: string;
+  value?: string;
+  options?: { value: string; label: string }[];
+  onInputChange?: (e: CustomEvent<{ target: HTMLSelectElement }>) => void;
+}) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id}>{props.label}</label>
+      <select
+        id={id}
+        value={props.value ?? ''}
+        onChange={(e) =>
+          props.onInputChange?.(new CustomEvent('inputChange', { detail: { target: e.target } }))
+        }
+      >
+        {props.options?.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export function ModusWcEmptyState(props: {
+  heading: string;
+  subtitle?: string;
+  actionLabel?: string;
+  onActionClick?: () => void;
+}) {
+  // Modus renders the heading as an h2.
+  return (
+    <section>
+      <h2>{props.heading}</h2>
+      {props.subtitle && <p>{props.subtitle}</p>}
+      {props.actionLabel && (
+        <button type="button" onClick={() => props.onActionClick?.()}>
+          {props.actionLabel}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -56,10 +147,30 @@ export function ModusWcLoader(props: { 'aria-label'?: string }) {
   return <div role="status" aria-label={props['aria-label']} />;
 }
 
+type TableRow = Record<string, unknown>;
+
+/** Renders a column's cellRenderer result, which Modus allows to be a string or a DOM element. */
+function RenderedCell({ content }: { content: string | HTMLElement }) {
+  const ref = useRef<HTMLTableCellElement>(null);
+  useEffect(() => {
+    const cell = ref.current;
+    if (!cell || typeof content === 'string') return;
+    cell.replaceChildren(content);
+    return () => cell.replaceChildren();
+  }, [content]);
+  return <td ref={ref}>{typeof content === 'string' ? content : null}</td>;
+}
+
 export function ModusWcTable(props: {
   caption?: string;
-  columns: { id: string; header: string; accessor: string }[];
-  data: Record<string, unknown>[];
+  columns: {
+    id: string;
+    header: string;
+    accessor: string;
+    cellRenderer?: (value: unknown, row: TableRow) => string | HTMLElement;
+  }[];
+  data: TableRow[];
+  onRowClick?: (e: CustomEvent<{ row: TableRow; index: number }>) => void;
 }) {
   return (
     <table>
@@ -73,10 +184,17 @@ export function ModusWcTable(props: {
       </thead>
       <tbody>
         {props.data.map((row, index) => (
-          <tr key={String(row.id ?? index)}>
-            {props.columns.map((column) => (
-              <td key={column.id}>{String(row[column.accessor] ?? '')}</td>
-            ))}
+          <tr
+            key={String(row.id ?? index)}
+            onClick={() => props.onRowClick?.(new CustomEvent('rowClick', { detail: { row, index } }))}
+          >
+            {props.columns.map((column) =>
+              column.cellRenderer ? (
+                <RenderedCell key={column.id} content={column.cellRenderer(row[column.accessor], row)} />
+              ) : (
+                <td key={column.id}>{String(row[column.accessor] ?? '')}</td>
+              ),
+            )}
           </tr>
         ))}
       </tbody>

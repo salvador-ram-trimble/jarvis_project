@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`jarvis_project` is a simple CRM (customers and jobs) built for the Trimble 2026 Global Hackathon. The PRD and the phased plan are in `plans/`. Phase 1 (the tracer bullet: create and list customers, deployed to Azure) is implemented.
+`jarvis_project` is a simple CRM (customers and jobs) built for the Trimble 2026 Global Hackathon. The PRD and the phased plan are in `plans/`. Phases 1 (the tracer bullet, deployed to Azure) and 2 (full customer management: every field, detail and edit pages, sorting, and the loading, empty, error and not-found states) are implemented. Jobs (phase 3) are next.
 
 ## Environment
 
@@ -32,14 +32,17 @@ Run these from the repo root.
 
 npm-workspaces monorepo with three packages:
 
-- `shared` (`@jarvis/shared`): the API contract types (`Customer`, `CustomerInput`, `ApiErrorBody`, `HealthResponse`). It's compiled to `shared/dist`, so build it (any root script does) before the server or client can see changes. Client and server must take these types from here, never redefine them.
+- `shared` (`@jarvis/shared`): the API contract (`Customer`, `CustomerInput`, `CustomerPatch`, `Address`, `ApiErrorBody`, `HealthResponse`) plus the validation rules both sides use (`isValidEmail`, `validationMessages`). It's compiled to `shared/dist`, so build it (any root script does) before the server or client can see changes. Client and server must take these from here, never redefine them.
 - `server` (`@jarvis/server`): Express 5 + Mongoose 9, ESM.
   - `src/app.ts`: `createApp({ connection, clientDistPath })` is the app factory. Models are registered on the connection it is given (see `models/customer.ts`), which is how tests run it against `mongodb-memory-server` (`test/testDb.ts`).
   - `src/index.ts`: the process entry point. It loads `server/.env`, connects to `MONGODB_URI`, and listens before the database connects, so `/api/health` can report a database problem (503).
+  - `src/routes/customers.ts`: picks only known fields from the body. A blank string (or `null`) means "not set", so on `PATCH` it clears the field, and an address with nothing filled in is stored as no address. `PATCH` replaces the whole `address`. The API leaves unset optional fields out of responses.
   - `src/errors.ts`: the single error middleware. It produces every error response as `{ error: { message, fields? } }`: Mongoose validation → 400 with `fields`, cast errors (malformed ids) → 404, bad JSON → 400, and anything else → 500. Throw an `HttpError` for other statuses. Express 5 forwards rejected promises from async handlers to it.
   - Import Mongoose as a default import (`mongoose.Schema`, `mongoose.ConnectionStates`). Node's ESM loader can't see some of its named exports, even though Vitest can.
 - `client` (`@jarvis/client`): React 19 + Vite + React Router 7 + Modus Web Components (`@trimble-oss/moduswebcomponents-react`, pinned to an exact version).
-  - `src/api/client.ts` is the typed `fetch` wrapper. It throws `ApiError` with `status`, `message` and `fields`. Pages use it through small hooks in `src/hooks/`. There is no global state library.
+  - `src/api/client.ts` is the typed `fetch` wrapper. It throws `ApiError` with `status`, `message` and `fields`. Pages use it through small hooks in `src/hooks/` built on `useApiData` (loading) and `useApiAction` (saving) from `useApi.ts`. Detail and edit pages show `NotFoundPage` when the API returns 404. There is no global state library.
+  - Leaving a form (cancel or save on edit) uses `useGoBack`, which goes back in history so Back and Forward behave, and falls back to a replace when the page was opened directly. Creating a record replaces the form entry with the new record's page. List sorting lives in the URL (`?sort=`).
   - `src/components/AppShell.tsx` holds the Modus navbar and side navigation. The side nav floats over the page, so the shell offsets `<main>` by the nav's width itself.
-  - Modus inputs report changes through custom events, which React renders a tick late. Forms keep their latest values in a ref and read that on submit (see `CustomerForm.tsx`), so an Enter right after typing isn't lost.
-  - Modus components don't render in jsdom. `src/test/setup.ts` replaces the whole Modus React package with the plain-element stand-ins in `src/test/modusMock.tsx`, and tests query by role and label. Add a stand-in there for every new Modus component you use.
+  - Modus inputs report changes through custom events, which React renders a tick late. Forms keep their latest values in a ref and read that on submit (see `CustomerForm.tsx`), so an Enter right after typing isn't lost. `CustomerForm` sends every field, trimmed, so a cleared field is cleared on the server.
+  - Modus components don't render in jsdom. `src/test/setup.ts` replaces the whole Modus React package with the plain-element stand-ins in `src/test/modusMock.tsx`, and tests query by role and label. Add a stand-in there for every new Modus component you use (the empty state renders its heading as an `h2`, like the real one).
+  - `src/test/setup.ts` also mocks every `api` method with `vi.fn()` (reset after each test), so add new API methods there too. Page tests render the whole app at a URL with `renderApp` from `src/test/renderApp.tsx`, which also provides `currentLocation()`, "Browser back" and "Browser forward" buttons, and customer fixtures.

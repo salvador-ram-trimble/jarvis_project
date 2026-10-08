@@ -1,14 +1,26 @@
-import { Link } from 'react-router';
+import { ModusWcEmptyState } from '@trimble-oss/moduswebcomponents-react';
+import { useNavigate } from 'react-router';
 
-export function NotFoundPage() {
+interface NotFoundPageProps {
+  title?: string;
+  message?: string;
+}
+
+/** Shown for unknown routes, and by detail and edit pages when the record doesn't exist. */
+export function NotFoundPage({
+  title = 'Page not found',
+  message = 'There is nothing at this address.',
+}: NotFoundPageProps) {
+  const navigate = useNavigate();
+
   return (
-    <>
-      <div className="page-header">
-        <h1>Page not found</h1>
-      </div>
-      <p>
-        There is nothing at this address. <Link to="/customers">Go to customers</Link>
-      </p>
-    </>
+    <ModusWcEmptyState
+      variant="error"
+      illustration="error_404_page"
+      heading={title}
+      subtitle={message}
+      actionLabel="Go to customers"
+      onActionClick={() => navigate('/customers')}
+    />
   );
 }

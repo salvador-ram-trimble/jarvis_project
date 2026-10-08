@@ -1,61 +1,65 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Customer } from '@jarvis/shared';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
-import { CustomersListPage } from './CustomersListPage';
-import { NewCustomerPage } from './NewCustomerPage';
+import { currentLocation, fullCustomer, makeCustomer, renderApp } from '../test/renderApp';
 
-vi.mock('../api/client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../api/client')>();
-  return {
-    ...actual,
-    api: { health: vi.fn(), customers: { list: vi.fn(), create: vi.fn() } },
-  };
-});
+const emptyAddress = { street: '', city: '', state: '', postalCode: '', country: '' };
 
-const acme: Customer = {
-  id: 'c1',
-  name: 'Acme Plumbing',
-  createdAt: '2026-10-08T12:00:00.000Z',
-  updatedAt: '2026-10-08T12:00:00.000Z',
-};
-
-function renderNewCustomerPage() {
-  render(
-    <MemoryRouter initialEntries={['/customers/new']}>
-      <Routes>
-        <Route path="/customers" element={<CustomersListPage />} />
-        <Route path="/customers/new" element={<NewCustomerPage />} />
-      </Routes>
-    </MemoryRouter>,
-  );
-}
-
-describe('New customer form', () => {
-  beforeEach(() => {
-    vi.mocked(api.customers.create).mockReset();
-    vi.mocked(api.customers.list).mockReset();
-  });
-
-  it('creates a customer with a name and returns to the list, which shows it', async () => {
+describe('New customer page', () => {
+  it('creates a customer with just a name and opens their page', async () => {
     const user = userEvent.setup();
+    const acme = makeCustomer();
     vi.mocked(api.customers.create).mockResolvedValue(acme);
-    vi.mocked(api.customers.list).mockResolvedValue([acme]);
-    renderNewCustomerPage();
+    vi.mocked(api.customers.get).mockResolvedValue(acme);
+    renderApp('/customers/new');
 
     await user.type(screen.getByLabelText('Name'), '  Acme Plumbing ');
     await user.click(screen.getByRole('button', { name: 'Create customer' }));
 
-    expect(api.customers.create).toHaveBeenCalledWith({ name: 'Acme Plumbing' });
-    expect(await screen.findByRole('heading', { name: 'Customers' })).toBeInTheDocument();
-    expect(await screen.findByRole('cell', { name: 'Acme Plumbing' })).toBeInTheDocument();
+    expect(api.customers.create).toHaveBeenCalledWith({
+      name: 'Acme Plumbing',
+      company: '',
+      email: '',
+      phone: '',
+      address: emptyAddress,
+      notes: '',
+    });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Acme Plumbing' })).toBeInTheDocument();
+    expect(currentLocation()).toBe('/customers/c1');
+  });
+
+  it('sends every field', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.customers.create).mockResolvedValue(fullCustomer);
+    vi.mocked(api.customers.get).mockResolvedValue(fullCustomer);
+    renderApp('/customers/new');
+
+    await user.type(screen.getByLabelText('Name'), 'Ada Lovelace');
+    await user.type(screen.getByLabelText('Company'), 'Analytical Engines Ltd');
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com');
+    await user.type(screen.getByLabelText('Phone'), '+1 555 0100');
+    await user.type(screen.getByLabelText('Street'), '1 Main St');
+    await user.type(screen.getByLabelText('City'), 'Springfield');
+    await user.type(screen.getByLabelText('State / region'), 'IL');
+    await user.type(screen.getByLabelText('Postal code'), '62701');
+    await user.type(screen.getByLabelText('Country'), 'USA');
+    await user.type(screen.getByLabelText('Notes'), 'Prefers email.');
+    await user.click(screen.getByRole('button', { name: 'Create customer' }));
+
+    expect(api.customers.create).toHaveBeenCalledWith({
+      name: 'Ada Lovelace',
+      company: 'Analytical Engines Ltd',
+      email: 'ada@example.com',
+      phone: '+1 555 0100',
+      address: { street: '1 Main St', city: 'Springfield', state: 'IL', postalCode: '62701', country: 'USA' },
+      notes: 'Prefers email.',
+    });
   });
 
   it('requires a name before submitting', async () => {
     const user = userEvent.setup();
-    renderNewCustomerPage();
+    renderApp('/customers/new');
 
     await user.click(screen.getByRole('button', { name: 'Create customer' }));
 
@@ -63,29 +67,54 @@ describe('New customer form', () => {
     expect(screen.getByLabelText('Name')).toHaveAccessibleDescription('Name is required');
   });
 
-  it('shows a field error from the server next to the field and stays on the form', async () => {
+  it('rejects an invalid email before submitting', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.customers.create).mockRejectedValue(
-      new ApiError(400, 'Validation failed', { name: 'Name is already taken' }),
-    );
-    renderNewCustomerPage();
+    renderApp('/customers/new');
 
     await user.type(screen.getByLabelText('Name'), 'Acme');
+    await user.type(screen.getByLabelText('Email'), 'acme@');
     await user.click(screen.getByRole('button', { name: 'Create customer' }));
 
-    expect(await screen.findByText('Name is already taken')).toBeInTheDocument();
-    expect(screen.getByLabelText('Name')).toHaveAccessibleDescription('Name is already taken');
+    expect(api.customers.create).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Email')).toHaveAccessibleDescription('Enter a valid email address');
+    expect(screen.getByLabelText('Name')).not.toHaveAccessibleDescription();
+  });
+
+  it('shows a field error from the server next to that field and stays on the form', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.customers.create).mockRejectedValue(
+      new ApiError(400, 'Validation failed', { email: 'This email is not allowed' }),
+    );
+    renderApp('/customers/new');
+
+    await user.type(screen.getByLabelText('Name'), 'Acme');
+    await user.type(screen.getByLabelText('Email'), 'acme@example.com');
+    await user.click(screen.getByRole('button', { name: 'Create customer' }));
+
+    expect(await screen.findByText('This email is not allowed')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toHaveAccessibleDescription('This email is not allowed');
     expect(screen.getByRole('heading', { name: 'New customer' })).toBeInTheDocument();
   });
 
   it('shows a message when the server fails without field errors', async () => {
     const user = userEvent.setup();
     vi.mocked(api.customers.create).mockRejectedValue(new ApiError(500, 'Something went wrong on the server'));
-    renderNewCustomerPage();
+    renderApp('/customers/new');
 
     await user.type(screen.getByLabelText('Name'), 'Acme');
     await user.click(screen.getByRole('button', { name: 'Create customer' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong on the server');
+  });
+
+  it('goes to the customers list on cancel when opened directly', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.customers.list).mockResolvedValue([]);
+    renderApp('/customers/new');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('heading', { name: 'Customers' })).toBeInTheDocument();
+    expect(currentLocation()).toBe('/customers');
   });
 });
