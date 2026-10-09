@@ -80,3 +80,5 @@ Redeploy:
 ```
 
 The script zip-deploys the source. App Service runs `npm install` and `npm run build`, then starts the app with `npm start`. The app is served at `https://<AppName>.azurewebsites.net`.
+
+Agentic Platform connected.
